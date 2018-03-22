@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 #from tensorflow.python.framework import ops
 
-from Actor import *
+from DDPGModels import *
 from powerflowEnv import *
 
 import time
@@ -29,17 +29,23 @@ Yh_test = Y_train[:,0:Y_test.shape[1]] # get hueristic control for the test set
 
 # size of state and action
 n_x = X_train.shape[0] # 5 nodes * 24 hours
-n_y = Y_train.shape[0] # 5 discreet actions
+n_y = Y_train.shape[0]
 
-num_epochs = 2000 #2000
+num_epochs = 4000 #2000
 costs=[]
 
 # size of 2 hidden layers in network
-layers = [100,25]
+layers = [100,50]
+layers_critic = [100,50,25,1] #hidden units for state,action,layer2 combine state and action, output
 
 tf.reset_default_graph()
 
-actor = Actor(n_x, n_y, layers)
+#actor = Actor(n_x, n_y, layers)
+actorAsync = AsyncNets(n_x, n_y, layers, class_name='Actor',pretrain=True)
+actor,actor_target = actorAsync.get_subnets()
+criticAsync = AsyncNets(n_x, n_y, layers_critic, class_name='Critic')
+critic,critic_target = criticAsync.get_subnets()
+
 actor.set_train()
 
 init = tf.global_variables_initializer()
@@ -47,10 +53,13 @@ saver = tf.train.Saver()
 print('Starting Training')
 with tf.Session() as sess:
 	init.run()
-	actor.set_session(sess)
+	#actor.set_session(sess)
+	actorAsync.set_session(sess)
+	criticAsync.set_session(sess)
 
 	if restore_model == True:
-		saver.restore(sess, "./models/pretrain1.ckpt")
+		#saver.restore(sess, "./models/pretrain3_2.ckpt")
+		saver.restore(sess, "./models/train3_1.ckpt")
 		print("Model restored.")
 	else:
 		for epoch in range(num_epochs+1):
@@ -59,11 +68,12 @@ with tf.Session() as sess:
 	        
 	        # Print the cost every 100 epochs
 	        if epoch % 100 == 0:
-	            print ("Cost after epoch %i: %f" % (epoch, epoch_cost))
+	            print("Cost after epoch %i: %f" % (epoch, epoch_cost))
 	        if epoch % 5 == 0:
 	            costs.append(epoch_cost)
-	            
-		save_path = saver.save(sess, "./models/pretrain1.ckpt")
+
+		actorAsync.async_update(tau=1) # copy trained actor net to actor target
+		save_path = saver.save(sess, "./models/pretrain3_2.ckpt")
 		print("Model saved in path: %s" % save_path)
 	
 	# evaluate costs
@@ -81,7 +91,12 @@ with tf.Session() as sess:
 	test_loss = sess.run(cost_test)
 	print('Test loss', test_loss)
 
-	np.savez('Pretrain_Predictions', pred_dev=pred_dev, pred_test=pred_test)
+	pred_test = actor_target.predict_action(X_test.T)
+	cost_test = tf.losses.mean_squared_error(Yh_test.T,pred_test)
+	test_loss = sess.run(cost_test)
+	print('Test loss target', test_loss)
+
+	np.savez('Pretrain_Predictionsf_2', pred_dev=pred_dev, pred_test=pred_test, costs=costs)
 
 # DDPG code
 """

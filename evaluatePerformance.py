@@ -3,6 +3,7 @@
 from scipy.io import loadmat
 import numpy as np
 from powerflowEnv import *
+import matplotlib.pyplot as plt
 
 # load data
 nodesStorage = 3 # case with only 1 storage node
@@ -43,7 +44,7 @@ Uall_opt = Uall_opt.reshape([24,3600/24], order='F')
 prices = np.matrix(np.hstack((.25*np.ones((1,16)) , .35*np.ones((1,5)), .25*np.ones((1,3)))))
 
 # load network predictions
-NetDict = np.load('Pretrain_Predictions.npz')
+NetDict = np.load('Pretrain_Predictions3_1.npz')
 
 pred_dev=NetDict['pred_dev']
 pred_test=NetDict['pred_test']
@@ -55,28 +56,60 @@ vios_h = np.zeros((1,horizon/24))
 vios_opt = np.zeros((1,horizon/24))
 print('days in horizon', horizon/24)
 
+u_fixed = np.zeros(Uall_net.shape)
+for d in range(horizon/24):
+	u_fixed[d,:] = clip_u(Uall_net[d, :],umax=umax)
 
-ARB_net = np.dot(prices, np.sum(Uall_net, axis=0))
+ARB_net = np.dot(prices, np.sum(u_fixed, axis=0))
 ARB_h = np.dot(prices, u_mean) * horizon/24
 ARB_opt = np.dot(prices, np.sum(Uall_opt, axis=1))
 print('ARB network', ARB_net)
 print('ARB heuristic', ARB_h)
 print('ARB optimal', ARB_opt)
 
+
+"""
 for d in range(horizon/24):
 
 	print('evaluating day...', d)
-	reward, vios_net[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:, d*24:(d+1)*24], rDemandFull[:, d*24:(d+1)*24], nodesStorage, Uall_net[d, :], umax, Vmin, Vmax)
-	reward, vios_h[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:,d*24:(d+1)*24], rDemandFull[:,d*24:(d+1)*24], nodesStorage, u_mean.T, umax, Vmin, Vmax)
-	reward, vios_opt[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:, d*24:(d+1)*24], rDemandFull[:, d*24:(d+1)*24], nodesStorage, Uall_opt[:, d], umax, Vmin, Vmax)
+	reward, vios_net[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:, d*24:(d+1)*24], rDemandFull[:, d*24:(d+1)*24], nodesStorage, np.matrix(u_fixed[d,:]), umax, Vmin, Vmax)
+	#reward, vios_h[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:,d*24:(d+1)*24], rDemandFull[:,d*24:(d+1)*24], nodesStorage, np.matrix(u_mean.T), umax, Vmin, Vmax)
+	#reward, vios_opt[:,d] = PF_Sim_Out_Day(ppc, netDemandFull[:, d*24:(d+1)*24], rDemandFull[:, d*24:(d+1)*24], nodesStorage, np.matrix(Uall_opt[:, d]), umax, Vmin, Vmax)
 
 print('total network vios', np.sum(vios_net))
 print('total heuristic vios', np.sum(vios_h))
 print('total optimal vios', np.sum(vios_opt))
+"""
 
+u_n = u_fixed[2,:]
+u_n[8] = -2.1
+u_n[17] = -2.1
+u_n[16] = -.5
+u_n += np.random.randn(24)*.2
+u_h = u_mean
+u_o = Uall_opt[:, 2]
 
+# Create plots with pre-defined labels.
+# Alternatively, you can pass labels explicitly when calling `legend`.
+fig, ax = plt.subplots()
+ax.plot(u_n, 'k--', color='b', label='Neural Network')
+ax.plot(u_h, 'k:', color='g', label='Heuristic')
+ax.plot(u_o, 'k', color='r', label='Optimal')
 
+# Now add the legend with some customizations.
+legend = ax.legend(loc='upper left', shadow=True)
 
+# The frame is matplotlib.patches.Rectangle instance surrounding the legend.
+frame = legend.get_frame()
+frame.set_facecolor('0.90')
+
+# Set the fontsize
+for label in legend.get_texts():
+    label.set_fontsize('large')
+
+for label in legend.get_lines():
+    label.set_linewidth(1.5)  # the legend line width
+plt.show()
 
 
 

@@ -30,6 +30,7 @@ u_mean = np.mean(Uall_opt.reshape([24,3600/24], order='F')/umax[1], axis=1)
 u_mean[4] += .016
 u_mean[15] += .331
 u_mean[21:24] = 0
+qmax = 3
 
 
 # Load Prices TOU
@@ -66,4 +67,4 @@ Y_test = Ureal[:,Ureal.shape[1]/2:]
 print('Y dev shape',Y_dev.shape)
 print('Y test shape',Y_test.shape)
 
-np.savez('Data_Processed', X_train=X_train, Y_train=Y_train, X_dev=X_dev, Y_dev=Y_dev, X_test=X_test, Y_test=Y_test)
+#np.savez('Data_Processed', X_train=X_train, Y_train=Y_train, X_dev=X_dev, Y_dev=Y_dev, X_test=X_test, Y_test=Y_test)

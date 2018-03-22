@@ -4,6 +4,25 @@ from pypower.api import runpf, ppoption, makeYbus
 from scipy import sparse
 import numpy as np
 
+def clip_u(u,umax=1):
+	# assume qmin = -1
+	shape_u = u.shape
+	u = np.reshape(u,24)
+	qmin = 0*umax
+	qmax = 3*umax
+	q = 0
+	for i in range(len(u)):
+		q_tmp = q + u[i]
+		if q_tmp > qmax:
+			u[i] += qmax - q_tmp
+		elif q_tmp < qmin:
+			u[i] += qmin - q_tmp
+		q += u[i]
+	#print('after',u)
+
+	return np.reshape(u,shape_u)
+
+
 def DemoCase7():
 
     ## PYPOWER Case Format : Version 2
@@ -109,23 +128,23 @@ def PF_Sim_Out_Day(ppc, pDemand, rDemand, nodesStorage, action, umax, Vmin, Vmax
 	U = action
 	runVoltage = np.zeros((7,24))
 	for i in range(24):
-		runVoltage[:,i] = PF_Sim(ppc, pDemand[:,i], rDemand[:,i], nodesStorage, U[i], rootV2)
+		runVoltage[:,i] = PF_Sim(ppc, pDemand[:,i], rDemand[:,i], nodesStorage, U[:,i], rootV2)
 		maxV = np.max(runVoltage[:,i])
 		minV = np.amin(runVoltage[:,i])
 		maxmin = np.vstack((maxV,minV))
 		rootV2 = 2 - np.mean(maxmin,0)
 		rootV2 = np.matrix(np.square(rootV2))
-		runVoltage[:,i] = PF_Sim(ppc, pDemand[:,i], rDemand[:,i], nodesStorage, U[i], rootV2)
+		runVoltage[:,i] = PF_Sim(ppc, pDemand[:,i], rDemand[:,i], nodesStorage, U[:,i], rootV2)
 
 	# calculate reward from violations and charging
 	vGreater = (runVoltage-Vmax).clip(min=0)
 	vLess = (Vmin-runVoltage).clip(min=0)
 
 	vioTotal = np.sum(np.square(vGreater+vLess))
-	vReward = -1000*vioTotal # scale reward of violations
+	vReward = -150*vioTotal # scale reward of violations to make it 1 on average across all days
 	#cReward = (1-abs(action)**.5)/24/8
 	cReward = 0
-	totalReward = np.matrix(vReward+cReward)
+	totalReward = vReward+cReward
 
 	return totalReward, vioTotal
 
